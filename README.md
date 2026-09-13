@@ -77,13 +77,25 @@ potatoforge_calibration/<session>_<id>.safetensors
 potatoforge_calibration/<session>_<id>.json
 ```
 
-The node observes native or Comfy diffusion modules that are semantically named
-`Linear` and expose a rank-2 logical weight. Each Safetensors entry is a raw
-FP32 per-input-channel `sum_x2` vector named
-`<logical_weight_name>.sum_x2`; the JSON stores layer shapes and invocation
-counts. `baseline_label` describes the model that actually ran, including an
-INT8 ConvRot baseline. The captured basis is the logical input to each linear
-layer, so later quantization comparisons must use the same logical basis.
+V1 observes native or Comfy diffusion modules that are semantically named
+`Linear` and expose a rank-2 logical weight. It preserves the legacy raw FP32
+per-input-channel `<logical_weight_name>.sum_x2` vector and adds aligned
+per-evaluation input moments (`sum_x`, `sum_x2`, `max_abs_x`), actual Linear
+output moments (`sum_y`, `sum_y2`), exact sample/invocation counts, and optional
+root input/output energy diagnostics. An evaluation means one complete
+diffusion-model forward; it is not guaranteed to equal one KSampler step.
+
+The node does not store full activations. By default it stores two deterministic
+FP32 sentinel input rows per layer/evaluation; set
+`sample_rows_per_evaluation=0` to omit those actual-vector samples while keeping
+all V1 moments. Timestep/sigma metadata is best-effort. The artifact is intended
+for offline analysis, enabling reducers such as P95 or CVaR without claiming
+that the custom node calculates them. The V1 artifact scales with selected layers,
+evaluations, and feature widths.
+
+`baseline_label` describes the model that actually ran, including an INT8
+ConvRot baseline. The captured basis is the logical input to each Linear layer,
+so later quantization comparisons must use the same logical basis.
 
 The offline consumer should validate `W` and `Wq` as
 `[out_features, in_features]` and each `sum_x2` vector as
